@@ -1,0 +1,32 @@
+# Byte-compiled / cache
+__pycache__/
+*.py[cod]
+
+# Virtual environments
+.venv/
+env/
+
+# OS files
+.DS_Store
+
+# Python packaging / logs
+*.egg-info/
+pip-log.txt
+
+# Model outputs and checkpoints
+outputs/
+artifacts/
+
+# Datasets generated during splitting
+dataset/train.csv
+dataset/val.csv
+dataset/test.csv
+dataset/combined_labels.csv
+
+# Jupyter notebooks
+.ipynb_checkpoints/
+
+# Transformers cache
+~/.cache/
+huggingface/
+

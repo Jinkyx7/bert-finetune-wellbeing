@@ -1,0 +1,10 @@
+torch
+transformers>=4.43
+datasets
+accelerate
+evaluate
+scikit-learn
+pandas
+numpy
+sentencepiece
+iterative-stratification
