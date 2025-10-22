@@ -1,3 +1,6 @@
+# Training Program Overview
+This repository houses the training pipeline for fine-tuning BERT on wellbeing classification tasks. The guidance below outlines how to structure modules, manage experiments, and contribute changes so that model training remains reproducible and consistent.
+
 # Repository Guidelines
 
 ## Project Structure & Module Organization

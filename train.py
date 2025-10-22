@@ -24,15 +24,19 @@ from src.utils import safe_mkdirs, seed_everything
 
 
 class WeightedTrainer(Trainer):
+    """Trainer subclass that injects per-label positive weights into BCE loss."""
+
     def __init__(self, pos_weight: torch.Tensor, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.pos_weight = pos_weight
 
     def compute_loss(self, model, inputs, return_outputs=False, **kwargs):
+        """Override to compute BCE loss with positive class weighting."""
         labels = inputs["labels"]
         model_inputs = {k: v for k, v in inputs.items() if k != "labels"}
         outputs = model(**model_inputs)
         logits = outputs.logits
+        # BCEWithLogitsLoss supports per-class positive weights to counter class imbalance.
         loss_fct = torch.nn.BCEWithLogitsLoss(pos_weight=self.pos_weight.to(logits.device))
         loss = loss_fct(logits, labels.float())
         if return_outputs:
@@ -41,6 +45,7 @@ class WeightedTrainer(Trainer):
 
 
 def parse_args() -> argparse.Namespace:
+    """Parse CLI arguments controlling data paths, training hyperparameters, and runtime flags."""
     parser = argparse.ArgumentParser(description="Fine-tune XLM-Roberta for multi-label classification.")
     parser.add_argument("--model_name", type=str, default="xlm-roberta-base")
     parser.add_argument("--csv_path", type=str, default="dataset/combined_labels.csv")
@@ -64,6 +69,7 @@ def parse_args() -> argparse.Namespace:
 
 
 def compute_class_weights(train_df, label_cols: List[str]) -> torch.Tensor:
+    """Compute inverse-frequency positive weights for BCE loss to address imbalance."""
     totals = len(train_df)
     weights = []
     for col in label_cols:
@@ -73,11 +79,13 @@ def compute_class_weights(train_df, label_cols: List[str]) -> torch.Tensor:
             print(f"Warning: label '{col}' has no positives in training data. Using weight = 1.0.")
             weights.append(1.0)
         else:
+            # Larger weight increases penalty when positive samples are rare.
             weights.append(negatives / positives if positives else 1.0)
     return torch.tensor(weights, dtype=torch.float32)
 
 
 def warn_missing_labels(split_name: str, df, label_cols: List[str]) -> None:
+    """Emit warnings when a split has constant labels, signalling limited coverage."""
     for col in label_cols:
         unique = set(df[col].unique())
         if len(unique) <= 1:
@@ -85,22 +93,28 @@ def warn_missing_labels(split_name: str, df, label_cols: List[str]) -> None:
 
 
 def save_metrics(path: Path, metrics: Dict[str, float]) -> None:
+    """Persist scalar metrics dictionary as JSON with consistent float serialization."""
     path.parent.mkdir(parents=True, exist_ok=True)
     with path.open("w", encoding="utf-8") as fp:
         json.dump({k: float(v) for k, v in metrics.items()}, fp, indent=2)
 
 
 def main() -> None:
+    """Coordinate dataset preparation, trainer construction, training, and evaluation."""
     args = parse_args()
+
+    # Respect the CPU-only flag by disabling accelerated backends.
     if args.no_cuda:
         args.fp16 = False
         os.environ["CUDA_VISIBLE_DEVICES"] = ""
         os.environ["PYTORCH_ENABLE_MPS_FALLBACK"] = "1"
         print("Running on CPU (no CUDA/MPS).")
 
+    # Keep RNG-controlled components deterministic for reproducible runs.
     seed_everything(args.seed)
 
     print("Creating within-company splits...")
+    # Maintain company boundaries while splitting to avoid data leakage.
     splits = split_within_company(
         csv_path=args.csv_path,
         text_col=args.text_col,
@@ -117,6 +131,7 @@ def main() -> None:
     warn_missing_labels("validation", val_df, args.label_cols)
     warn_missing_labels("test", test_df, args.label_cols)
 
+    # Convert raw text splits into tokenized datasets compatible with Trainer.
     tokenized_datasets, tokenizer = load_tokenized_datasets(
         model_name=args.model_name,
         data_dir="dataset",
@@ -138,11 +153,14 @@ def main() -> None:
         config=config,
     )
 
+    # Balance the loss by weighting positives inversely to their frequency.
     pos_weight = compute_class_weights(train_df, args.label_cols)
     print(f"Using class weights: {pos_weight.tolist()}")
 
+    # Map CLI parameters to TrainingArguments for the current transformers version.
     training_args = build_training_arguments(args)
 
+    # Provide a metric callback that reports macro-F1 and related scores.
     compute_metrics = compute_metrics_factory(args.label_cols)
 
     trainer = WeightedTrainer(
@@ -155,9 +173,11 @@ def main() -> None:
         tokenizer=tokenizer,
     )
 
+    # Run fine-tuning and persist model artifacts to the requested directory.
     trainer.train()
     trainer.save_model(args.output_dir)
 
+    # Ensure the output directory exists for downstream metric and threshold files.
     safe_mkdirs(args.output_dir)
 
     val_dataset = tokenized_datasets["validation"]
@@ -176,6 +196,7 @@ def main() -> None:
         y_true_val = val_predictions.label_ids
 
         if args.tune_thresholds:
+            # Convert logits to probabilities and derive label-wise decision thresholds.
             y_prob_val = 1.0 / (1.0 + np.exp(-logits_val))
             thresholds_path = Path(args.output_dir) / "thresholds.json"
             thresholds = tune_thresholds(
@@ -200,6 +221,7 @@ def main() -> None:
         logits_test = test_predictions.predictions
         y_true_test = test_predictions.label_ids
 
+        # Reuse metric factory so tuned thresholds (if any) apply to the held-out set.
         metric_fn = compute_metrics_factory(args.label_cols, thresholds=thresholds)
         test_metrics = metric_fn(EvalPrediction(predictions=logits_test, label_ids=y_true_test))
         save_metrics(Path(args.output_dir) / "metrics_test.json", test_metrics)
@@ -210,9 +232,12 @@ def main() -> None:
 
 
 def build_training_arguments(args: argparse.Namespace) -> TrainingArguments:
+    """Translate CLI arguments into TrainingArguments, handling version compatibility."""
+    # Inspect the TrainingArguments signature so we only pass supported kwargs.
     sig_params = set(inspect.signature(TrainingArguments.__init__).parameters)
 
     def maybe_set(kwargs: dict, key: str, value) -> None:
+        """Assign key/value when the current transformers version supports it."""
         if key in sig_params:
             kwargs[key] = value
         else:
@@ -232,6 +257,7 @@ def build_training_arguments(args: argparse.Namespace) -> TrainingArguments:
     maybe_set(training_kwargs, "logging_steps", 50)
     maybe_set(training_kwargs, "report_to", [])
 
+    # Evaluation/save strategy argument names shifted across transformers releases.
     if "evaluation_strategy" in sig_params:
         training_kwargs["evaluation_strategy"] = "epoch"
     elif "eval_strategy" in sig_params:
@@ -239,6 +265,7 @@ def build_training_arguments(args: argparse.Namespace) -> TrainingArguments:
     else:
         print("Warning: evaluation_strategy not supported; validation will run on demand only.")
 
+    # Align checkpoint scheduling with the evaluation cadence when possible.
     if "save_strategy" in sig_params:
         training_kwargs["save_strategy"] = "epoch"
     elif "save_steps" in sig_params:
