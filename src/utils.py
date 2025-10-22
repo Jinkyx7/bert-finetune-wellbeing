@@ -75,6 +75,7 @@ def ensure_binary_labels(df: pd.DataFrame, label_cols: Iterable[str]) -> pd.Data
             if found:
                 rename_map[found] = target
             else:
+                # Surface helpful context when labels are missing or mislabeled upstream.
                 synonyms = {col.rstrip("_label").rstrip("_lbl") for col in df.columns}
                 raise KeyError(
                     f"Missing label column '{target}'. "
@@ -82,6 +83,7 @@ def ensure_binary_labels(df: pd.DataFrame, label_cols: Iterable[str]) -> pd.Data
                     f"Provide matching column names (synonyms include: {', '.join(sorted(synonyms))})."
                 )
         if rename_map:
+            # Rename detected aliases so downstream code can rely on canonical labels.
             df.rename(columns=rename_map, inplace=True)
 
     for col in label_cols:

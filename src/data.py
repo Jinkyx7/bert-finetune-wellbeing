@@ -9,6 +9,7 @@ from transformers import AutoTokenizer, PreTrainedTokenizerBase
 
 
 def _clean_dataframe(df: pd.DataFrame, text_col: str) -> pd.DataFrame:
+    """Trim whitespace, coerce text to string, and drop empty rows."""
     df = df.copy()
     df[text_col] = df[text_col].astype(str).str.strip()
     df = df[df[text_col].astype(bool)].reset_index(drop=True)
@@ -16,6 +17,7 @@ def _clean_dataframe(df: pd.DataFrame, text_col: str) -> pd.DataFrame:
 
 
 def _load_csv(path: Path, text_col: str, label_cols: Sequence[str]) -> pd.DataFrame:
+    """Load a CSV if present; otherwise return an empty frame with expected columns."""
     if not path.exists():
         return pd.DataFrame(columns=[text_col, *label_cols])
     df = pd.read_csv(path)
@@ -23,6 +25,7 @@ def _load_csv(path: Path, text_col: str, label_cols: Sequence[str]) -> pd.DataFr
 
 
 def _build_dataset(df: pd.DataFrame, text_col: str, label_cols: Sequence[str]) -> Dataset:
+    """Wrap a pandas DataFrame in a Hugging Face Dataset while preserving labels."""
     if df.empty:
         data_dict = {text_col: []}
         for col in label_cols:
@@ -39,13 +42,17 @@ def _tokenize_dataset(
     label_cols: Sequence[str],
     max_length: int,
 ) -> Dataset:
+    """Tokenize text examples and attach label tensors for Trainer compatibility."""
+
     def tokenize(batch):
+        # Tokenize a minibatch with padding/truncation to a consistent sequence length.
         tokens = tokenizer(
             batch[text_col],
             padding="max_length",
             truncation=True,
             max_length=max_length,
         )
+        # Preserve multi-label targets for each example in the same order as label_cols.
         labels = [
             [float(batch[col][idx]) for col in label_cols]
             for idx in range(len(batch[text_col]))
@@ -74,6 +81,7 @@ def load_tokenized_datasets(
     label_cols: Sequence[str],
     max_length: int = 256,
 ) -> DatasetDict:
+    """Load train/validation/test CSV splits and return tokenized Dataset objects."""
     tokenizer = AutoTokenizer.from_pretrained(model_name)
     paths = {
         "train": Path(data_dir) / "train.csv",

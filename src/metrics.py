@@ -10,6 +10,7 @@ from transformers import EvalPrediction
 
 
 def _sigmoid(x: np.ndarray) -> np.ndarray:
+    """Numerically stable sigmoid helper for converting logits to probabilities."""
     return 1.0 / (1.0 + np.exp(-x))
 
 
@@ -17,11 +18,13 @@ def compute_metrics_factory(
     label_cols: Sequence[str],
     thresholds: Dict[str, float] | None = None,
 ) -> Callable[[EvalPrediction], Dict[str, float]]:
+    """Build a metrics callback that applies label-wise thresholds and aggregates scores."""
     label_cols = list(label_cols)
     thresholds = thresholds or {label: 0.5 for label in label_cols}
     thresholds = {label: thresholds.get(label, 0.5) for label in label_cols}
 
     def compute_metrics(eval_pred: EvalPrediction) -> Dict[str, float]:
+        """Compute F1 and AUROC metrics for multi-label predictions."""
         logits = eval_pred.predictions
         if isinstance(logits, (tuple, list)):
             logits = logits[0]
@@ -85,6 +88,7 @@ def tune_thresholds(
     label_cols: Iterable[str],
     output_path: str | Path = "thresholds.json",
 ) -> Dict[str, float]:
+    """Grid-search label-wise decision thresholds that maximize F1 scores."""
     label_cols = list(label_cols)
     y_true = np.asarray(y_true)
     y_prob = np.asarray(y_prob)
@@ -101,6 +105,7 @@ def tune_thresholds(
             continue
         label_probs = y_prob[:, idx]
         for threshold in candidate_thresholds:
+            # Evaluate candidate thresholds by binary F1 score to select the best cutoff.
             preds = (label_probs >= threshold).astype(int)
             score = f1_score(label_true, preds, zero_division=0)
             if score > best_score or (np.isclose(score, best_score) and threshold < best_threshold):

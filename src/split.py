@@ -18,6 +18,8 @@ from .utils import (
 
 @dataclass
 class SplitResult:
+    """Lightweight container for per-split company data frames."""
+
     train: pd.DataFrame
     val: pd.DataFrame
     test: pd.DataFrame
@@ -26,6 +28,7 @@ class SplitResult:
 def _simple_split_indices(
     n_samples: int, train_fraction: float, seed: int
 ) -> Tuple[np.ndarray, np.ndarray]:
+    """Randomly split indices when stratification is not feasible."""
     rng = np.random.default_rng(seed)
     indices = np.arange(n_samples)
     rng.shuffle(indices)
@@ -42,8 +45,10 @@ def _split_company(
     ratios: Tuple[float, float, float],
     seed: int,
 ) -> SplitResult:
+    """Split a single company's examples into train/val/test with multilabel stratification."""
     n_rows = len(df_company)
     if n_rows < 5:
+        # Too few samples to meaningfully split; keep entire company in training.
         return SplitResult(train=df_company, val=df_company.iloc[0:0], test=df_company.iloc[0:0])
 
     train_ratio, val_ratio, test_ratio = ratios
@@ -56,6 +61,7 @@ def _split_company(
         )
         train_idx, temp_idx = next(splitter.split(label_matrix, label_matrix))
     except ValueError:
+        # Fall back to a simple shuffle split when stratification fails (e.g., all-zero columns).
         train_fraction = train_ratio
         train_idx, temp_idx = _simple_split_indices(n_rows, train_fraction, seed)
 
@@ -76,6 +82,7 @@ def _split_company(
         )
         val_idx, test_idx = next(sub_splitter.split(label_matrix_temp, label_matrix_temp))
     except ValueError:
+        # If stratification still fails, default to a shuffle split for validation/test.
         val_fraction = val_ratio / temp_ratio if temp_ratio else 0.5
         val_idx, test_idx = _simple_split_indices(len(temp_df), val_fraction, secondary_seed)
 
@@ -92,6 +99,7 @@ def split_within_company(
     seed: int = 42,
     ratios: Tuple[float, float, float] = (0.8, 0.1, 0.1),
 ) -> Dict[str, pd.DataFrame]:
+    """Perform company-aware train/val/test splits and persist the resulting CSVs."""
     df = pd.read_csv(csv_path)
     if text_col not in df.columns:
         raise KeyError(f"Text column '{text_col}' not found. Available: {df.columns.tolist()}")
@@ -110,6 +118,7 @@ def split_within_company(
 
     rng = np.random.default_rng(seed)
     companies = df[company_col].unique()
+    # Shuffle company order so deterministic seeds still randomize assignment.
     rng.shuffle(companies)
 
     for idx, company in enumerate(companies):
@@ -142,6 +151,7 @@ def split_within_company(
     val_path = destination / "val.csv"
     test_path = destination / "test.csv"
 
+    # Persist splits so subsequent stages (tokenization/training) read consistent data.
     train_df.to_csv(train_path, index=False)
     val_df.to_csv(val_path, index=False)
     test_df.to_csv(test_path, index=False)
