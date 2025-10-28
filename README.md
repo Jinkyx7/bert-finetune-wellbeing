@@ -59,3 +59,24 @@ python predict.py \
 ```
 
 The script loads saved thresholds when available and writes per-label probabilities (`prob_*`) and binary predictions (`pred_*`). Keep `--seed` at its default (42) for reproducible splits and results.
+
+To analyse a PDF annual report directly, provide a `--pdf_path` instead of `--csv_path`:
+
+```bash
+python predict.py \
+  --model_dir outputs/xlmr-within-v1 \
+  --pdf_path reports/AIR2024.pdf \
+  --out_csv outputs/air2024_sentences.csv
+```
+
+The PDF pipeline mirrors the `bert-document-scan` utilities: text is cleaned to fix common encoding issues, segmented into sentences, and filtered to retain informative spans between 30 and 600 characters. The resulting CSV includes the extracted sentence, `source_page`, and the canonical `source_pdf` identifier alongside probability and prediction columns.
+
+For batch processing, use the helper script to scan an entire directory (defaults to `reports/`). Each PDF produces two reports: `<name>_predictions.csv` (probs+binary flags) and `<name>_probabilities.csv` (probs only):
+
+```bash
+python pdf_predict.py \
+  --model_dir outputs/xlmr-within-v1 \
+  --output_dir outputs/pdf_reports
+```
+
+You can still target specific files by listing them after the arguments (e.g., `python pdf_predict.py --model_dir ... reports/AIR2024.pdf`).***

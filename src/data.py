@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Dict, Iterable, Sequence
+from typing import Dict, Sequence
 
 import pandas as pd
 from datasets import Dataset, DatasetDict

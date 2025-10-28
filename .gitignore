@@ -1,6 +1,7 @@
 # Byte-compiled / cache
 __pycache__/
 *.py[cod]
+.ruff_cache/
 
 # Virtual environments
 .venv/
@@ -16,6 +17,7 @@ pip-log.txt
 # Model outputs and checkpoints
 outputs/
 artifacts/
+reports/
 
 # Datasets generated during splitting
 dataset/train.csv
@@ -29,4 +31,3 @@ dataset/combined_labels.csv
 # Transformers cache
 ~/.cache/
 huggingface/
-

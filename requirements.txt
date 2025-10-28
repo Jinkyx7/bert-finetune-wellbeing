@@ -6,5 +6,6 @@ evaluate
 scikit-learn
 pandas
 numpy
+pymupdf
 sentencepiece
 iterative-stratification

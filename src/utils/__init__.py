@@ -3,11 +3,37 @@ from __future__ import annotations
 import os
 import random
 from pathlib import Path
-from typing import Iterable, List
+from typing import Iterable
 
 import numpy as np
 import pandas as pd
 import torch
+
+from .pdf_processor import (
+    clean_extracted_text,
+    extract_company_code,
+    extract_sentences_with_pages,
+    fetch_pdf,
+    get_pdf_files,
+    safe_report_name,
+    text_to_sentences,
+)
+
+
+__all__ = [
+    "clean_extracted_text",
+    "extract_company_code",
+    "extract_sentences_with_pages",
+    "fetch_pdf",
+    "get_pdf_files",
+    "safe_report_name",
+    "text_to_sentences",
+    "seed_everything",
+    "find_company_column",
+    "ensure_binary_labels",
+    "safe_mkdirs",
+    "pretty_label_stats",
+]
 
 
 def seed_everything(seed: int = 42) -> None:
@@ -75,7 +101,6 @@ def ensure_binary_labels(df: pd.DataFrame, label_cols: Iterable[str]) -> pd.Data
             if found:
                 rename_map[found] = target
             else:
-                # Surface helpful context when labels are missing or mislabeled upstream.
                 synonyms = {col.rstrip("_label").rstrip("_lbl") for col in df.columns}
                 raise KeyError(
                     f"Missing label column '{target}'. "
@@ -83,7 +108,6 @@ def ensure_binary_labels(df: pd.DataFrame, label_cols: Iterable[str]) -> pd.Data
                     f"Provide matching column names (synonyms include: {', '.join(sorted(synonyms))})."
                 )
         if rename_map:
-            # Rename detected aliases so downstream code can rely on canonical labels.
             df.rename(columns=rename_map, inplace=True)
 
     for col in label_cols:
