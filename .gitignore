@@ -24,6 +24,7 @@ dataset/train.csv
 dataset/val.csv
 dataset/test.csv
 dataset/combined_labels.csv
+dataset/sus_initial_labels.csv
 
 # Jupyter notebooks
 .ipynb_checkpoints/

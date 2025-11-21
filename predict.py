@@ -21,6 +21,12 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--model_dir", type=str, required=True)
     parser.add_argument("--csv_path", type=str, default=None)
     parser.add_argument("--pdf_path", type=str, default=None, help="Optional PDF file to extract sentences from.")
+    parser.add_argument(
+        "--reports_dir",
+        type=str,
+        default=None,
+        help="Directory containing PDF reports to batch process.",
+    )
     parser.add_argument("--text_col", type=str, default="sentence")
     parser.add_argument(
         "--label_cols",
@@ -28,6 +34,12 @@ def parse_args() -> argparse.Namespace:
         default=["social", "environment", "financial", "maori"],
     )
     parser.add_argument("--out_csv", type=str, default="outputs/predictions.csv")
+    parser.add_argument(
+        "--out_dir",
+        type=str,
+        default="outputs/preds",
+        help="Output directory used when --reports_dir is provided.",
+    )
     parser.add_argument("--batch_size", type=int, default=32)
     parser.add_argument("--max_length", type=int, default=256)
     return parser.parse_args()
@@ -129,6 +141,10 @@ def predict_dataframe(
 def main() -> None:
     args = parse_args()
     model_dir = Path(args.model_dir)
+
+    if args.reports_dir and (args.csv_path or args.pdf_path):
+        raise ValueError("Use either --reports_dir for batch PDFs or a single --pdf_path/--csv_path, not both.")
+
     output_path = Path(args.out_csv)
     safe_mkdirs(output_path.parent)
 
@@ -140,6 +156,39 @@ def main() -> None:
         df.rename(columns={"sentence": args.text_col}, inplace=True)
         df["source_pdf"] = safe_report_name(args.pdf_path)
         df.rename(columns={"page": "source_page"}, inplace=True)
+    elif args.reports_dir:
+        reports_dir = Path(args.reports_dir)
+        pdf_paths = sorted(p for p in reports_dir.glob("*.pdf") if p.is_file())
+        if not pdf_paths:
+            raise ValueError(f"No PDF files found in {reports_dir}")
+        out_dir = Path(args.out_dir)
+        safe_mkdirs(out_dir)
+        tokenizer, model, device = load_model_artifacts(model_dir)
+        thresholds = load_thresholds(model_dir, args.label_cols)
+        for pdf_path in pdf_paths:
+            sentences = extract_sentences_with_pages(pdf_path)
+            if not sentences:
+                print(f"Skipping {pdf_path} (no sentences extracted).")
+                continue
+            df_pdf = pd.DataFrame(sentences)
+            df_pdf.rename(columns={"sentence": args.text_col}, inplace=True)
+            df_pdf["source_pdf"] = safe_report_name(pdf_path)
+            df_pdf.rename(columns={"page": "source_page"}, inplace=True)
+            output_df = predict_dataframe(
+                df_pdf,
+                text_col=args.text_col,
+                label_cols=args.label_cols,
+                tokenizer=tokenizer,
+                model=model,
+                device=device,
+                thresholds=thresholds,
+                batch_size=args.batch_size,
+                max_length=args.max_length,
+            )
+            dest = out_dir / f"preds-{pdf_path.stem}.csv"
+            output_df.to_csv(dest, index=False)
+            print(f"Saved predictions to {dest}")
+        return
     else:
         if not args.csv_path:
             raise ValueError("Provide either --csv_path or --pdf_path for inference.")
