@@ -16,6 +16,7 @@ from src.utils.pdf_processor import (
 
 
 def build_dataframe_from_pdf(pdf_path: Path, text_col: str) -> pd.DataFrame:
+    """Extract sentences/pages from a PDF and normalize column names for inference."""
     sentences = extract_sentences_with_pages(str(pdf_path))
     if not sentences:
         raise ValueError(f"No sentences extracted from PDF: {pdf_path}")
@@ -26,6 +27,7 @@ def build_dataframe_from_pdf(pdf_path: Path, text_col: str) -> pd.DataFrame:
 
 
 def parse_args() -> argparse.Namespace:
+    """Define CLI for PDF-only batch or single-report prediction runs."""
     parser = argparse.ArgumentParser(
         description="Analyse one or more PDF reports with the finetuned wellbeing classifier."
     )
@@ -55,6 +57,7 @@ def parse_args() -> argparse.Namespace:
 
 
 def main() -> None:
+    """Discover PDF files, run predictions, and write per-report CSVs."""
     args = parse_args()
     model_dir = Path(args.model_dir)
     output_dir = Path(args.output_dir)

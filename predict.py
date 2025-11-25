@@ -17,6 +17,7 @@ from src.utils.pdf_processor import extract_sentences_with_pages, safe_report_na
 
 
 def parse_args() -> argparse.Namespace:
+    """Define CLI arguments for running inference over CSVs or PDFs."""
     parser = argparse.ArgumentParser(description="Run inference with a trained multi-label classifier.")
     parser.add_argument("--model_dir", type=str, required=True)
     parser.add_argument("--csv_path", type=str, default=None)
@@ -46,6 +47,7 @@ def parse_args() -> argparse.Namespace:
 
 
 def load_thresholds(model_dir: Path, label_cols: List[str]) -> Dict[str, float]:
+    """Load per-label decision thresholds saved after validation; default to 0.5 when absent."""
     thresholds_path = model_dir / "thresholds.json"
     if thresholds_path.exists():
         with thresholds_path.open("r", encoding="utf-8") as fp:
@@ -55,6 +57,7 @@ def load_thresholds(model_dir: Path, label_cols: List[str]) -> Dict[str, float]:
 
 
 def prepare_dataset(df: pd.DataFrame, text_col: str, label_cols: List[str]) -> Dataset:
+    """Build a minimal Hugging Face Dataset containing text plus any present labels."""
     base_columns = [text_col]
     for col in label_cols:
         if col in df.columns:
@@ -64,6 +67,7 @@ def prepare_dataset(df: pd.DataFrame, text_col: str, label_cols: List[str]) -> D
 
 
 def load_model_artifacts(model_dir: Path) -> Tuple[AutoTokenizer, AutoModelForSequenceClassification, torch.device]:
+    """Load tokenizer/model from disk and place the model on an available device."""
     tokenizer = AutoTokenizer.from_pretrained(model_dir)
     model = AutoModelForSequenceClassification.from_pretrained(model_dir)
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -84,6 +88,7 @@ def predict_dataframe(
     batch_size: int = 32,
     max_length: int = 256,
 ) -> pd.DataFrame:
+    """Run model inference over a DataFrame and return probabilities/predictions per label."""
     working_df = df.copy()
     if text_col not in working_df.columns:
         raise KeyError(f"Column '{text_col}' not found in dataframe.")
@@ -139,6 +144,7 @@ def predict_dataframe(
 
 
 def main() -> None:
+    """Entry point handling CSV input, single-PDF, or batch PDF inference flows."""
     args = parse_args()
     model_dir = Path(args.model_dir)
 
