@@ -16,6 +16,14 @@ from src.utils import safe_mkdirs
 from src.utils.pdf_processor import extract_sentences_with_pages, safe_report_name
 
 
+UNWANTED_PRED_COLUMNS = {
+    "pred_fin_label",
+    "pred_soc_label",
+    "pred_env_label",
+    "pred_maori_label",
+}
+
+
 def parse_args() -> argparse.Namespace:
     """Define CLI arguments for running inference over CSVs or PDFs."""
     parser = argparse.ArgumentParser(description="Run inference with a trained multi-label classifier.")
@@ -143,6 +151,14 @@ def predict_dataframe(
     return output_df
 
 
+def drop_unwanted_pred_columns(df: pd.DataFrame) -> pd.DataFrame:
+    """Remove specific prediction columns that should not appear in exported CSVs."""
+    drop_targets = [col for col in UNWANTED_PRED_COLUMNS if col in df.columns]
+    if not drop_targets:
+        return df
+    return df.drop(columns=drop_targets)
+
+
 def main() -> None:
     """Entry point handling CSV input, single-PDF, or batch PDF inference flows."""
     args = parse_args()
@@ -191,6 +207,7 @@ def main() -> None:
                 batch_size=args.batch_size,
                 max_length=args.max_length,
             )
+            output_df = drop_unwanted_pred_columns(output_df)
             dest = out_dir / f"preds-{pdf_path.stem}.csv"
             output_df.to_csv(dest, index=False)
             print(f"Saved predictions to {dest}")
@@ -213,6 +230,7 @@ def main() -> None:
         batch_size=args.batch_size,
         max_length=args.max_length,
     )
+    output_df = drop_unwanted_pred_columns(output_df)
     output_df.to_csv(output_path, index=False)
     print(f"Saved predictions to {output_path}")
 
