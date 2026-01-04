@@ -8,11 +8,7 @@ import pandas as pd
 
 from predict import load_model_artifacts, load_thresholds, predict_dataframe
 from src.utils import safe_mkdirs
-from src.utils.pdf_processor import (
-    extract_sentences_with_pages,
-    get_pdf_files,
-    safe_report_name,
-)
+from src.utils.pdf_processor import extract_sentences_with_pages, get_pdf_files, safe_report_name
 
 
 def build_dataframe_from_pdf(
