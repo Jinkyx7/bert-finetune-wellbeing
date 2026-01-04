@@ -8,11 +8,19 @@ and filename handling across projects.
 
 from __future__ import annotations
 
+import io
 import re
 from pathlib import Path
 from typing import List
 
 import fitz  # PyMuPDF
+
+try:
+    from PIL import Image
+    import pytesseract
+except ImportError:  # pragma: no cover - optional OCR dependency
+    Image = None
+    pytesseract = None
 
 
 def clean_extracted_text(text: str) -> str:
@@ -111,7 +119,25 @@ def fetch_pdf(pdf_source: str) -> str:
     return pdf_source
 
 
-def extract_sentences_with_pages(pdf_path: str, min_len: int = 30, max_len: int = 600) -> List[dict[str, str | int]]:
+def _ocr_page_text(page: fitz.Page, ocr_dpi: int, ocr_lang: str) -> str:
+    """
+    Run OCR on a PDF page image using Tesseract.
+    """
+    if Image is None or pytesseract is None:
+        raise ImportError("OCR requires Pillow and pytesseract. Install them and ensure Tesseract is available.")
+    pix = page.get_pixmap(dpi=ocr_dpi)
+    image = Image.open(io.BytesIO(pix.tobytes("png")))
+    return pytesseract.image_to_string(image, lang=ocr_lang)
+
+
+def extract_sentences_with_pages(
+    pdf_path: str,
+    min_len: int = 30,
+    max_len: int = 600,
+    enable_ocr: bool = False,
+    ocr_lang: str = "eng",
+    ocr_dpi: int = 300,
+) -> List[dict[str, str | int]]:
     """
     Extract cleaned sentences from a PDF, keeping track of the source page.
     """
@@ -120,7 +146,10 @@ def extract_sentences_with_pages(pdf_path: str, min_len: int = 30, max_len: int 
 
     try:
         for page_index in range(len(doc)):
-            text = doc[page_index].get_text("text")
+            page = doc[page_index]
+            text = page.get_text("text")
+            if enable_ocr and not text.strip():
+                text = _ocr_page_text(page, ocr_dpi=ocr_dpi, ocr_lang=ocr_lang)
             text = clean_extracted_text(text)
             text = re.sub(r"[ \t]+", " ", text)
             text = re.sub(r"\s+\n", "\n", text)

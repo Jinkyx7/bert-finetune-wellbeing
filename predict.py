@@ -36,6 +36,13 @@ def parse_args() -> argparse.Namespace:
         default=None,
         help="Directory containing PDF reports to batch process.",
     )
+    parser.add_argument(
+        "--enable_ocr",
+        action="store_true",
+        help="Enable OCR fallback for scanned PDFs (requires Pillow + pytesseract + system tesseract).",
+    )
+    parser.add_argument("--ocr_lang", type=str, default="eng", help="Tesseract language code for OCR.")
+    parser.add_argument("--ocr_dpi", type=int, default=300, help="DPI used when rendering PDF pages for OCR.")
     parser.add_argument("--text_col", type=str, default="sentence")
     parser.add_argument(
         "--label_cols",
@@ -171,7 +178,12 @@ def main() -> None:
     safe_mkdirs(output_path.parent)
 
     if args.pdf_path:
-        sentences = extract_sentences_with_pages(args.pdf_path)
+        sentences = extract_sentences_with_pages(
+            args.pdf_path,
+            enable_ocr=args.enable_ocr,
+            ocr_lang=args.ocr_lang,
+            ocr_dpi=args.ocr_dpi,
+        )
         if not sentences:
             raise ValueError(f"No sentences extracted from PDF: {args.pdf_path}")
         df = pd.DataFrame(sentences)
@@ -188,7 +200,12 @@ def main() -> None:
         tokenizer, model, device = load_model_artifacts(model_dir)
         thresholds = load_thresholds(model_dir, args.label_cols)
         for pdf_path in pdf_paths:
-            sentences = extract_sentences_with_pages(pdf_path)
+            sentences = extract_sentences_with_pages(
+                pdf_path,
+                enable_ocr=args.enable_ocr,
+                ocr_lang=args.ocr_lang,
+                ocr_dpi=args.ocr_dpi,
+            )
             if not sentences:
                 print(f"Skipping {pdf_path} (no sentences extracted).")
                 continue

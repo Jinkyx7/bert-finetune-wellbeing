@@ -7,5 +7,7 @@ scikit-learn
 pandas
 numpy
 pymupdf
+pillow
+pytesseract
 sentencepiece
 iterative-stratification

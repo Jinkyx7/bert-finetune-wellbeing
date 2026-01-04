@@ -15,9 +15,20 @@ from src.utils.pdf_processor import (
 )
 
 
-def build_dataframe_from_pdf(pdf_path: Path, text_col: str) -> pd.DataFrame:
+def build_dataframe_from_pdf(
+    pdf_path: Path,
+    text_col: str,
+    enable_ocr: bool,
+    ocr_lang: str,
+    ocr_dpi: int,
+) -> pd.DataFrame:
     """Extract sentences/pages from a PDF and normalize column names for inference."""
-    sentences = extract_sentences_with_pages(str(pdf_path))
+    sentences = extract_sentences_with_pages(
+        str(pdf_path),
+        enable_ocr=enable_ocr,
+        ocr_lang=ocr_lang,
+        ocr_dpi=ocr_dpi,
+    )
     if not sentences:
         raise ValueError(f"No sentences extracted from PDF: {pdf_path}")
     df = pd.DataFrame(sentences)
@@ -45,6 +56,13 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument("--output_dir", default="outputs/pdf_reports", help="Directory to write prediction CSV files.")
     parser.add_argument("--text_col", default="sentence", help="Name to use for the extracted sentence column.")
+    parser.add_argument(
+        "--enable_ocr",
+        action="store_true",
+        help="Enable OCR fallback for scanned PDFs (requires Pillow + pytesseract + system tesseract).",
+    )
+    parser.add_argument("--ocr_lang", default="eng", help="Tesseract language code for OCR.")
+    parser.add_argument("--ocr_dpi", type=int, default=300, help="DPI used when rendering PDF pages for OCR.")
     parser.add_argument(
         "--label_cols",
         nargs="+",
@@ -83,7 +101,13 @@ def main() -> None:
             continue
 
         try:
-            df = build_dataframe_from_pdf(pdf_path, args.text_col)
+            df = build_dataframe_from_pdf(
+                pdf_path,
+                args.text_col,
+                enable_ocr=args.enable_ocr,
+                ocr_lang=args.ocr_lang,
+                ocr_dpi=args.ocr_dpi,
+            )
         except ValueError as exc:
             print(f"Skipping {pdf_path}: {exc}")
             continue

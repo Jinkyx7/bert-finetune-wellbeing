@@ -87,7 +87,7 @@ python predict.py \
   --out_csv outputs/air2024_sentences.csv
 ```
 
-The PDF pipeline mirrors the `bert-document-scan` utilities: text is cleaned to fix common encoding issues, segmented into sentences, and filtered to retain informative spans between 30 and 600 characters. The resulting CSV includes the extracted sentence, `source_page`, and the canonical `source_pdf` identifier alongside probability and prediction columns.
+The PDF pipeline mirrors the `bert-document-scan` utilities: text is cleaned to fix common encoding issues, segmented into sentences, and filtered to retain informative spans between 30 and 600 characters. The resulting CSV includes the extracted sentence, `source_page`, and the canonical `source_pdf` identifier alongside probability and prediction columns. For scanned PDFs, enable OCR with `--enable_ocr` (requires `pillow`, `pytesseract`, and a system Tesseract install).
 
 For batch processing, use the helper script to scan an entire directory (defaults to `reports/`). Each PDF produces two reports: `<name>_predictions.csv` (probs+binary flags) and `<name>_probabilities.csv` (probs only):
 
