@@ -78,17 +78,18 @@ python predict.py \
 
 The script loads saved thresholds when available and writes per-label probabilities (`prob_*`) and binary predictions (`pred_*`). Keep `--seed` at its default (42) for reproducible splits and results.
 
-To analyse a PDF annual report directly, provide a `--pdf_path` instead of `--csv_path` (add `--enable_ocr` for scanned PDFs):
+To analyse a PDF annual report directly, provide a `--pdf_path` instead of `--csv_path` (add `--enable_ocr` for scanned PDFs, or `--force_ocr` to OCR every page):
 
 ```bash
 python predict.py \
   --model_dir outputs/xlmr-within-v1 \
   --pdf_path reports/AIR2024.pdf \
   --enable_ocr \
+  --force_ocr \
   --out_csv outputs/air2024_sentences.csv
 ```
 
-The PDF pipeline mirrors the `bert-document-scan` utilities: text is cleaned to fix common encoding issues, segmented into sentences, and filtered to retain informative spans between 30 and 600 characters. The resulting CSV includes the extracted sentence, `source_page`, and the canonical `source_pdf` identifier alongside probability and prediction columns. For scanned PDFs, enable OCR with `--enable_ocr` (requires `pillow`, `pytesseract`, and a system Tesseract install).
+The PDF pipeline mirrors the `bert-document-scan` utilities: text is cleaned to fix common encoding issues, segmented into sentences, and filtered to retain informative spans between 30 and 600 characters. The resulting CSV includes the extracted sentence, `source_page`, and the canonical `source_pdf` identifier alongside probability and prediction columns. For scanned PDFs, enable OCR with `--enable_ocr` (requires `pillow`, `pytesseract`, and a system Tesseract install). Use `--force_ocr` to OCR every page regardless of embedded text.
 
 Install Tesseract (examples):
 
@@ -100,12 +101,13 @@ brew install tesseract
 sudo apt-get update && sudo apt-get install -y tesseract-ocr
 ```
 
-For batch processing, use the helper script to scan an entire directory (defaults to `reports/`). Each PDF produces two reports: `<name>_predictions.csv` (probs+binary flags) and `<name>_probabilities.csv` (probs only). Add `--enable_ocr` for scanned PDFs:
+For batch processing, use the helper script to scan an entire directory (defaults to `reports/`). Each PDF produces two reports: `<name>_predictions.csv` (probs+binary flags) and `<name>_probabilities.csv` (probs only). Add `--enable_ocr` for scanned PDFs or `--force_ocr` to always OCR:
 
 ```bash
 python pdf_predict.py \
   --model_dir outputs/xlmr-within-v1 \
   --enable_ocr \
+  --force_ocr \
   --output_dir outputs/pdf_reports
 ```
 

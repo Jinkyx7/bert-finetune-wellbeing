@@ -15,6 +15,7 @@ def build_dataframe_from_pdf(
     pdf_path: Path,
     text_col: str,
     enable_ocr: bool,
+    force_ocr: bool,
     ocr_lang: str,
     ocr_dpi: int,
 ) -> pd.DataFrame:
@@ -22,6 +23,7 @@ def build_dataframe_from_pdf(
     sentences = extract_sentences_with_pages(
         str(pdf_path),
         enable_ocr=enable_ocr,
+        force_ocr=force_ocr,
         ocr_lang=ocr_lang,
         ocr_dpi=ocr_dpi,
     )
@@ -56,6 +58,11 @@ def parse_args() -> argparse.Namespace:
         "--enable_ocr",
         action="store_true",
         help="Enable OCR fallback for scanned PDFs (requires Pillow + pytesseract + system tesseract).",
+    )
+    parser.add_argument(
+        "--force_ocr",
+        action="store_true",
+        help="Force OCR on every PDF page (overrides text extraction).",
     )
     parser.add_argument("--ocr_lang", default="eng", help="Tesseract language code for OCR.")
     parser.add_argument("--ocr_dpi", type=int, default=300, help="DPI used when rendering PDF pages for OCR.")
@@ -101,6 +108,7 @@ def main() -> None:
                 pdf_path,
                 args.text_col,
                 enable_ocr=args.enable_ocr,
+                force_ocr=args.force_ocr,
                 ocr_lang=args.ocr_lang,
                 ocr_dpi=args.ocr_dpi,
             )

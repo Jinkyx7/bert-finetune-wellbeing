@@ -135,6 +135,7 @@ def extract_sentences_with_pages(
     min_len: int = 30,
     max_len: int = 600,
     enable_ocr: bool = False,
+    force_ocr: bool = False,
     ocr_lang: str = "eng",
     ocr_dpi: int = 300,
 ) -> List[dict[str, str | int]]:
@@ -148,7 +149,7 @@ def extract_sentences_with_pages(
         for page_index in range(len(doc)):
             page = doc[page_index]
             text = page.get_text("text")
-            if enable_ocr and not text.strip():
+            if enable_ocr and (force_ocr or not text.strip()):
                 text = _ocr_page_text(page, ocr_dpi=ocr_dpi, ocr_lang=ocr_lang)
             text = clean_extracted_text(text)
             text = re.sub(r"[ \t]+", " ", text)

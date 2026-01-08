@@ -41,6 +41,11 @@ def parse_args() -> argparse.Namespace:
         action="store_true",
         help="Enable OCR fallback for scanned PDFs (requires Pillow + pytesseract + system tesseract).",
     )
+    parser.add_argument(
+        "--force_ocr",
+        action="store_true",
+        help="Force OCR on every PDF page (overrides text extraction).",
+    )
     parser.add_argument("--ocr_lang", type=str, default="eng", help="Tesseract language code for OCR.")
     parser.add_argument("--ocr_dpi", type=int, default=300, help="DPI used when rendering PDF pages for OCR.")
     parser.add_argument("--text_col", type=str, default="sentence")
@@ -181,6 +186,7 @@ def main() -> None:
         sentences = extract_sentences_with_pages(
             args.pdf_path,
             enable_ocr=args.enable_ocr,
+            force_ocr=args.force_ocr,
             ocr_lang=args.ocr_lang,
             ocr_dpi=args.ocr_dpi,
         )
@@ -203,6 +209,7 @@ def main() -> None:
             sentences = extract_sentences_with_pages(
                 pdf_path,
                 enable_ocr=args.enable_ocr,
+                force_ocr=args.force_ocr,
                 ocr_lang=args.ocr_lang,
                 ocr_dpi=args.ocr_dpi,
             )
