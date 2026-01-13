@@ -17,6 +17,7 @@ The project is built entirely on the PyTorch + Hugging Face stack:
 - `datasets` handles in-memory dataset objects for tokenization and efficient batching.
 - `iterstrat` keeps train/val/test splits multilabel-stratified inside each company.
 - `scikit-learn` provides F1 and AUROC metrics, while `numpy/pandas` drive preprocessing utilities.
+- PDF inference supports optional OCR for scanned documents (requires Tesseract when enabled).
 
 ## Data Placement
 Create `dataset/combined_labels.csv` by copying your labelled sentences into that exact path. The file is ignored by git by default, so every contributor must source it locally (or download from your agreed storage bucket) before training. The training script materializes `dataset/train.csv`, `dataset/val.csv`, and `dataset/test.csv` every time it runs so that tokenization uses the exact same records as the split step.
