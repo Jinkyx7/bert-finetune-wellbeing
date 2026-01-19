@@ -31,6 +31,12 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--csv_path", type=str, default=None)
     parser.add_argument("--pdf_path", type=str, default=None, help="Optional PDF file to extract sentences from.")
     parser.add_argument(
+        "--pdf_paths",
+        nargs="+",
+        default=None,
+        help="One or more PDF files to extract sentences from.",
+    )
+    parser.add_argument(
         "--reports_dir",
         type=str,
         default=None,
@@ -61,6 +67,11 @@ def parse_args() -> argparse.Namespace:
         default="outputs/preds",
         help="Output directory used when --reports_dir is provided.",
     )
+    parser.add_argument(
+        "--save_probabilities",
+        action="store_true",
+        help="Write probabilities-only CSVs alongside predictions when processing PDFs in batch.",
+    )
     parser.add_argument("--batch_size", type=int, default=32)
     parser.add_argument("--max_length", type=int, default=256)
     return parser.parse_args()
@@ -84,6 +95,30 @@ def prepare_dataset(df: pd.DataFrame, text_col: str, label_cols: List[str]) -> D
             base_columns.append(col)
     dataset = Dataset.from_pandas(df[base_columns], preserve_index=False)
     return dataset
+
+
+def build_dataframe_from_pdf(
+    pdf_path: Path,
+    text_col: str,
+    enable_ocr: bool,
+    force_ocr: bool,
+    ocr_lang: str,
+    ocr_dpi: int,
+) -> pd.DataFrame:
+    """Extract sentences/pages from a PDF and normalize column names for inference."""
+    sentences = extract_sentences_with_pages(
+        str(pdf_path),
+        enable_ocr=enable_ocr,
+        force_ocr=force_ocr,
+        ocr_lang=ocr_lang,
+        ocr_dpi=ocr_dpi,
+    )
+    if not sentences:
+        raise ValueError(f"No sentences extracted from PDF: {pdf_path}")
+    df = pd.DataFrame(sentences)
+    df.rename(columns={"sentence": text_col, "page": "source_page"}, inplace=True)
+    df["source_pdf"] = safe_report_name(str(pdf_path))
+    return df
 
 
 def load_model_artifacts(model_dir: Path) -> Tuple[AutoTokenizer, AutoModelForSequenceClassification, torch.device]:
@@ -171,55 +206,63 @@ def drop_unwanted_pred_columns(df: pd.DataFrame) -> pd.DataFrame:
     return df.drop(columns=drop_targets)
 
 
+def write_probabilities_only(output_df: pd.DataFrame, dest: Path) -> None:
+    """Persist a probabilities-only CSV without binary prediction columns."""
+    prob_only = output_df.drop(columns=[col for col in output_df.columns if col.startswith("pred_")])
+    prob_only.to_csv(dest, index=False)
+
+
 def main() -> None:
     """Entry point handling CSV input, single-PDF, or batch PDF inference flows."""
     args = parse_args()
     model_dir = Path(args.model_dir)
 
-    if args.reports_dir and (args.csv_path or args.pdf_path):
+    if args.reports_dir and (args.csv_path or args.pdf_path or args.pdf_paths):
         raise ValueError("Use either --reports_dir for batch PDFs or a single --pdf_path/--csv_path, not both.")
+    if args.pdf_path and args.pdf_paths:
+        raise ValueError("Use either --pdf_path or --pdf_paths, not both.")
 
     output_path = Path(args.out_csv)
-    safe_mkdirs(output_path.parent)
+    pdf_paths: List[Path] = []
+    single_pdf_to_out_csv = False
 
-    if args.pdf_path:
-        sentences = extract_sentences_with_pages(
-            args.pdf_path,
-            enable_ocr=args.enable_ocr,
-            force_ocr=args.force_ocr,
-            ocr_lang=args.ocr_lang,
-            ocr_dpi=args.ocr_dpi,
-        )
-        if not sentences:
-            raise ValueError(f"No sentences extracted from PDF: {args.pdf_path}")
-        df = pd.DataFrame(sentences)
-        df.rename(columns={"sentence": args.text_col}, inplace=True)
-        df["source_pdf"] = safe_report_name(args.pdf_path)
-        df.rename(columns={"page": "source_page"}, inplace=True)
+    if args.pdf_paths:
+        pdf_paths = [Path(pdf_path) for pdf_path in args.pdf_paths]
+    elif args.pdf_path:
+        pdf_paths = [Path(args.pdf_path)]
+        single_pdf_to_out_csv = True
     elif args.reports_dir:
         reports_dir = Path(args.reports_dir)
         pdf_paths = sorted(p for p in reports_dir.glob("*.pdf") if p.is_file())
         if not pdf_paths:
             raise ValueError(f"No PDF files found in {reports_dir}")
-        out_dir = Path(args.out_dir)
-        safe_mkdirs(out_dir)
+    else:
+        pdf_paths = []
+
+    if pdf_paths:
+        if single_pdf_to_out_csv:
+            safe_mkdirs(output_path.parent)
+        else:
+            out_dir = Path(args.out_dir)
+            safe_mkdirs(out_dir)
         tokenizer, model, device = load_model_artifacts(model_dir)
         thresholds = load_thresholds(model_dir, args.label_cols)
         for pdf_path in pdf_paths:
-            sentences = extract_sentences_with_pages(
-                pdf_path,
-                enable_ocr=args.enable_ocr,
-                force_ocr=args.force_ocr,
-                ocr_lang=args.ocr_lang,
-                ocr_dpi=args.ocr_dpi,
-            )
-            if not sentences:
-                print(f"Skipping {pdf_path} (no sentences extracted).")
+            if not pdf_path.exists():
+                print(f"Skipping {pdf_path}: file not found.")
                 continue
-            df_pdf = pd.DataFrame(sentences)
-            df_pdf.rename(columns={"sentence": args.text_col}, inplace=True)
-            df_pdf["source_pdf"] = safe_report_name(pdf_path)
-            df_pdf.rename(columns={"page": "source_page"}, inplace=True)
+            try:
+                df_pdf = build_dataframe_from_pdf(
+                    pdf_path,
+                    args.text_col,
+                    enable_ocr=args.enable_ocr,
+                    force_ocr=args.force_ocr,
+                    ocr_lang=args.ocr_lang,
+                    ocr_dpi=args.ocr_dpi,
+                )
+            except ValueError as exc:
+                print(f"Skipping {pdf_path}: {exc}")
+                continue
             output_df = predict_dataframe(
                 df_pdf,
                 text_col=args.text_col,
@@ -232,14 +275,28 @@ def main() -> None:
                 max_length=args.max_length,
             )
             output_df = drop_unwanted_pred_columns(output_df)
-            dest = out_dir / f"preds-{pdf_path.stem}.csv"
+            if single_pdf_to_out_csv:
+                output_df.to_csv(output_path, index=False)
+                print(f"Saved predictions to {output_path}")
+                if args.save_probabilities:
+                    prob_dest = output_path.with_name(f"{output_path.stem}_probabilities{output_path.suffix}")
+                    write_probabilities_only(output_df, prob_dest)
+                    print(f"Saved probabilities-only output to {prob_dest}")
+                return
+            report_name = safe_report_name(str(pdf_path)).lower()
+            dest = out_dir / f"{report_name}_predictions.csv"
             output_df.to_csv(dest, index=False)
             print(f"Saved predictions to {dest}")
+            if args.save_probabilities:
+                prob_dest = out_dir / f"{report_name}_probabilities.csv"
+                write_probabilities_only(output_df, prob_dest)
+                print(f"Saved probabilities-only output to {prob_dest}")
         return
     else:
         if not args.csv_path:
             raise ValueError("Provide either --csv_path or --pdf_path for inference.")
         df = pd.read_csv(args.csv_path)
+        safe_mkdirs(output_path.parent)
 
     tokenizer, model, device = load_model_artifacts(model_dir)
     thresholds = load_thresholds(model_dir, args.label_cols)
