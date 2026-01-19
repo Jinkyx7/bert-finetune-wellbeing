@@ -1,6 +1,6 @@
 # XLM-R Wellbeing Classifier
 
-> Contributors: review the cross-repo [Repository Guidelines](../AGENTS.md) before making changes.
+> Fine-tune an XLM-R classifier for wellbeing labels and use the trained model for CSV/PDF inference.
 
 ## Environment Setup
 Create a virtual environment and install the dependencies:
