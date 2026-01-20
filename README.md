@@ -92,7 +92,6 @@ python predict.py \
   --model_dir outputs/xlmr-wellbeing \
   --pdf_path reports/AIR2024.pdf \
   --enable_ocr \
-  --force_ocr \
   --out_csv outputs/air2024_sentences.csv
 ```
 
