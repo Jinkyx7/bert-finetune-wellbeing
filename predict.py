@@ -86,7 +86,7 @@ def load_thresholds(model_dir: Path, label_cols: List[str]) -> Dict[str, float]:
         return {label: float(data.get(label, 0.5)) for label in label_cols}
     return {label: 0.5 for label in label_cols}
 
-
+# Build a minimal Dataset for inference from a DataFrame.
 def prepare_dataset(df: pd.DataFrame, text_col: str, label_cols: List[str]) -> Dataset:
     """Build a minimal Hugging Face Dataset containing text plus any present labels."""
     base_columns = [text_col]
@@ -96,7 +96,7 @@ def prepare_dataset(df: pd.DataFrame, text_col: str, label_cols: List[str]) -> D
     dataset = Dataset.from_pandas(df[base_columns], preserve_index=False)
     return dataset
 
-
+# Build a DataFrame from extracted PDF sentences/pages for inference.
 def build_dataframe_from_pdf(
     pdf_path: Path,
     text_col: str,
@@ -120,7 +120,7 @@ def build_dataframe_from_pdf(
     df["source_pdf"] = safe_report_name(str(pdf_path))
     return df
 
-
+# Load model and tokenizer from disk, placing model on available device.
 def load_model_artifacts(model_dir: Path) -> Tuple[AutoTokenizer, AutoModelForSequenceClassification, torch.device]:
     """Load tokenizer/model from disk and place the model on an available device."""
     tokenizer = AutoTokenizer.from_pretrained(model_dir)
@@ -130,7 +130,7 @@ def load_model_artifacts(model_dir: Path) -> Tuple[AutoTokenizer, AutoModelForSe
     model.eval()
     return tokenizer, model, device
 
-
+# Build a DataLoader-friendly Dataset for inference.
 def predict_dataframe(
     df: pd.DataFrame,
     *,
@@ -148,11 +148,13 @@ def predict_dataframe(
     if text_col not in working_df.columns:
         raise KeyError(f"Column '{text_col}' not found in dataframe.")
 
+    # Clean text column by stripping whitespace and removing empty entries.
     working_df[text_col] = working_df[text_col].astype(str).str.strip()
     working_df = working_df[working_df[text_col].astype(bool)].reset_index(drop=True)
 
     dataset = prepare_dataset(working_df, text_col, label_cols)
 
+    # Tokenize dataset for model input.
     def collate(batch):
         texts = [item[text_col] for item in batch]
         tokens = tokenizer(
@@ -164,8 +166,10 @@ def predict_dataframe(
         )
         return tokens
 
+    # Create DataLoader for batching.
     dataloader = DataLoader(dataset, batch_size=batch_size, collate_fn=collate)
-
+    
+    # Run inference and collect probabilities.
     all_probs: List[np.ndarray] = []
 
     with torch.no_grad():
@@ -180,8 +184,10 @@ def predict_dataframe(
     else:
         y_prob = np.zeros((len(working_df), len(label_cols)), dtype=float)
 
+    # Apply thresholds to derive binary predictions.
     y_pred = (y_prob >= np.array([thresholds[label] for label in label_cols])).astype(int)
 
+    # Build output DataFrame with probabilities and predictions.
     prob_columns = [f"prob_{label}" for label in label_cols]
     pred_columns = [f"pred_{label}" for label in label_cols]
 

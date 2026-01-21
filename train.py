@@ -140,6 +140,7 @@ def main() -> None:
         max_length=args.max_length,
     )
 
+    # Instantiate a model configured for multi-label classification.
     config = AutoConfig.from_pretrained(
         args.model_name,
         num_labels=len(args.label_cols),
@@ -153,14 +154,14 @@ def main() -> None:
         config=config,
     )
 
-    # Balance the loss by weighting positives inversely to their frequency.
+    # (Rare things matter more when learning) Balance the loss by weighting positives inversely to their frequency.
     pos_weight = compute_class_weights(train_df, args.label_cols)
     print(f"Using class weights: {pos_weight.tolist()}")
 
-    # Map CLI parameters to TrainingArguments for the current transformers version.
+    # (The rules for studying) Map CLI parameters to TrainingArguments for the current transformers version.
     training_args = build_training_arguments(args)
 
-    # Provide a metric callback that reports macro-F1 and related scores.
+    # (How we judge success) Provide a metric callback that reports macro-F1 and related scores.
     compute_metrics = compute_metrics_factory(args.label_cols)
 
     trainer = WeightedTrainer(
